@@ -3,7 +3,7 @@ require 'sqlite3'
 
 # ====================== GLOBAL VARIABLES ====================== # 
 
-token = '334814720:AAFYszrLQ0BblusHQ5w9wdN4C8l5VkUTI-8'
+token = '383090060:AAHm-AYR6BIOrZ0Vs8_rhPnHTHwrKIqWNTg'
 
 begin
     db = SQLite3::Database.open "hutang.db"
@@ -89,12 +89,14 @@ Telegram::Bot::Client.run(token) do |bot|
             sess[message.from.id] = Hash.new
             sess[message.from.id]['loanee'] = ''
             sess[message.from.id]['loanee_id'] = ''
+            sess[message.from.id]['amount'] = 0
             sess[message.from.id]['u_lock'] = 0
             sess[message.from.id]['l_lock'] = 0
         end
 
         loanee = sess[message.from.id]['loanee']
         loanee_id = sess[message.from.id]['loanee_id']
+        amount = sess[message.from.id]['amount']
 
         if message.text == '/cancel'
             sess[message.from.id]['u_lock'] = 0
@@ -115,10 +117,16 @@ Telegram::Bot::Client.run(token) do |bot|
                 sess[message.from.id]['u_lock'] += 1
             elsif sess[message.from.id]['u_lock'] == 2
                 amount = message.text.to_i
-                konfirmasi = 'Oh, jadi ' + loanee + ' berhutang sebanyak ' + amount.to_s + ' ke kamu. Mudah2an cepat dibayar ya! sudah dicatat'
-                bot.api.send_message(chat_id: message.chat.id, text: konfirmasi)
+                sess[message.from.id]['amount'] = amount
+                nice_amt = amount.to_s.reverse.gsub(/...(?=.)/,'\&,').reverse
+                konfirmasi = "Oh, jadi *#{loanee}* berhutang sebanyak *#{nice_amt}* ke kamu. Apakah sudah benar? Kirim '_Ya, Benar_' untuk konfirmasi"
+                bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', text: konfirmasi)
+                sess[message.from.id]['u_lock'] += 1
+            elsif sess[message.from.id]['u_lock'] == 3 and message.text == 'Ya, Benar'
                 db.execute "INSERT INTO hutang_log(loaner_id,loanee_id,amount) VALUES(#{message.from.id},#{loanee_id},#{amount})"
                 insert_rel(db, loanee_id, message.from.id, (amount * -1))
+                konfirmasi = 'Mudah2an cepat dibayar ya! sudah kita catat'
+                bot.api.send_message(chat_id: message.chat.id, text: konfirmasi)
                 sess[message.from.id]['u_lock'] = 0
             end
         # Lunasin Case
@@ -132,10 +140,16 @@ Telegram::Bot::Client.run(token) do |bot|
                 sess[message.from.id]['l_lock'] += 1
             elsif sess[message.from.id]['l_lock'] == 2
                 amount = message.text.to_i
-                konfirmasi = 'Oh, jadi ' + loanee + ' melunasi sebanyak ' + amount.to_s + ' ke kamu. Selamat ya! sudah dicatat'
-                bot.api.send_message(chat_id: message.chat.id, text: konfirmasi)
+                sess[message.from.id]['amount'] = amount
+                nice_amt = amount.to_s.reverse.gsub(/...(?=.)/,'\&,').reverse
+                konfirmasi = "Oh, jadi *#{loanee}* melunasi sebanyak *#{nice_amt}* ke kamu. Apakah sudah benar? Kirim '_Ya, Benar_' untuk konfirmasi"
+                bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', text: konfirmasi)
+                sess[message.from.id]['l_lock'] += 1
+            elsif sess[message.from.id]['l_lock'] == 3 and message.text == 'Ya, Benar'
                 db.execute "INSERT INTO lunas_log(loaner_id,loanee_id,amount) VALUES(#{message.from.id},#{loanee_id},#{amount})"
                 insert_rel(db, loanee_id, message.from.id, amount)
+                konfirmasi = 'Asiik selamat ya! sudah kita catat'
+                bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', text: konfirmasi)
                 sess[message.from.id]['l_lock'] = 0
             end
         # Tombokin Case [Coming Soon]
@@ -158,7 +172,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     db.execute "INSERT INTO users VALUES(#{message.from.id},'#{message.from.first_name}','#{message.from.last_name}','#{message.from.username}')"
                     bot.api.send_message(chat_id: message.chat.id, text: "Welcome to the hutang world, @#{message.from.username}")
                 rescue => e
-                    bot.api.send_message(chat_id: message.chat.id, text: "Gausah tulis /start lagin, @#{message.from.username}! Lagi banyak hutang apa banyak yang ngutang?")
+                    bot.api.send_message(chat_id: message.chat.id, text: "Gausah tulis /start lagi, @#{message.from.username}! Lagi banyak hutang apa banyak yang ngutang?")
                     puts e
                 end
             when '/hutang'
@@ -195,7 +209,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     out_text = ''
 
                     if plus.length > 0
-                        out_text = "Berikut ini adalah daftar hutang-hutang kamu:  \n"
+                        out_text = "Berikut ini adalah daftar hutang-hutang kamu:  \nDan "
                     end
 
                     plus.each do |key, value|
@@ -205,7 +219,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     end
     
                     if minus.length > 0
-                        out_text += "\ndan ini adalah daftar orang yang berhutang sama kamu:  \n"
+                        out_text += "\nini adalah daftar orang yang berhutang sama kamu:  \n"
                     end
 
                     minus.each do |key, value|
@@ -226,6 +240,18 @@ Telegram::Bot::Client.run(token) do |bot|
                     question = "Please register first, #{message.from.first_name}. Type /start to start using this app!"
                     bot.api.send_message(chat_id: message.chat.id, text: question)
                 end
+            when '/help'
+                help = "Halo, #{message.from.first_name}! Thanks sudah menggunakan @bayarutangbot \n\n"
+                help += "Bayar Utang Bot adalah sebuah bot yang bisa mencatat kegiatan perhutangan kamu, jadi kamu gak bakal lupa kalo ada yang ngutang sama kamu. Apalagi kalo kamu yang ngutang haha. Mudah-mudahan kita semua terbebas dari hutang ya! Jangan banyak ngutang gaes!\n\n"
+                help += "Mau berkontribusi? Pull request aja di https://github.com/abirafdi/bayarutang_bot"
+                bot.api.send_message(chat_id: message.chat.id, text: help)
+            when '/howto'
+                how = "Kalau kamu belum pernah terdaftar, ketik /start untuk memulai menggunakan bot \n"
+                how += "Untuk mencatat hutang seseorang ke kamu, ketik /hutang lalu pilih nama yang berhutang ke kamu dan tuliskan nominalnya\n"
+                how += "Untuk mencatat pelunasan seseorang ke kamu, ketik /lunas lalu pilih nama yang melunasi ke kamu dan tuliskan nominalnya\n"
+                how += "Untuk melihat keadaan perhutangan kamu, ketik /daftarhutang\n\n"
+                how += "Saat ini pencatatan baru bisa dilakukan dari sisi yang dihutangi."
+                bot.api.send_message(chat_id: message.chat.id, text: how)
             # Tombokan Coming Soon
             # when '/tombok'
             #     tombok_lock += 1
