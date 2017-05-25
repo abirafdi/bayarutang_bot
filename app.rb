@@ -3,7 +3,7 @@ require 'sqlite3'
 
 # ====================== GLOBAL VARIABLES ====================== # 
 
-token = '383090060:AAHm-AYR6BIOrZ0Vs8_rhPnHTHwrKIqWNTg'
+token = ENV["BAYAR_UTANG_TOKEN"]
 
 begin
     db = SQLite3::Database.open "hutang.db"
@@ -229,7 +229,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     end
 
                     if plus.length == 0 and minus.length == 0
-                        out_text += "Selamat! Kamu bebas dari lingkaran perhutangan"
+                        out_text += "Kamu tidak terkait dengan hutang apapun. Selamat! Kamu bebas dari lingkaran perhutangan"
                     else
                         out_text += "\nSemoga semua urusan hutang kamu dilancarkan ya"
                     end
