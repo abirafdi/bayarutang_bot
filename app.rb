@@ -224,8 +224,9 @@ Telegram::Bot::Client.run(token) do |bot|
             when '/start'
                 begin
                     db.execute "INSERT INTO users VALUES(#{usr_id},#{message.chat.id},'#{message.from.first_name}','#{message.from.last_name}','#{message.from.username}')"
-                    bot.api.send_message(chat_id: message.chat.id, text: "Welcome to the utang world, @#{message.from.username}")
+                    bot.api.send_message(chat_id: message.chat.id, text: "Welcome to the utang world, #{message.from.first_name}")
                 rescue => e
+                    db.execute "UPDATE users SET first_name='#{message.from.first_name}', last_name='#{message.from.last_name}',username='#{message.from.username}' WHERE user_id=#{usr_id}"
                     bot.api.send_message(chat_id: message.chat.id, text: "Gausah tulis /start lagi, @#{message.from.first_name}! Lagi banyak utang apa banyak yang ngutang?")
                     puts e
                 end
