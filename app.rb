@@ -6,7 +6,7 @@ require 'sqlite3'
 token = ENV["BAYAR_UTANG_TOKEN"]
 
 begin
-    db = SQLite3::Database.open "bayarutang_bot_stg.db"
+    db = SQLite3::Database.open "data/bayarutang_bot_stg.db"
     puts "Connected to SQLite3 Database"
     puts "Bot Ready"
 rescue SQLite3::Exception => e
@@ -94,7 +94,6 @@ end
 
 Telegram::Bot::Client.run(token) do |bot|
     sess = Hash.new
-    users = nil
 
     bot.listen do |message|
         # Value to make writing easier
@@ -105,11 +104,7 @@ Telegram::Bot::Client.run(token) do |bot|
         # Init session
         if(sess[sess_id] == nil)
             sess[sess_id] = Hash.new
-            sess[sess_id]['temp'] = ''
-            sess[sess_id]['other_id'] = ''
-            sess[sess_id]['amount'] = 0
-            sess[sess_id]['u_lock'] = 0
-            sess[sess_id]['l_lock'] = 0
+            sess[sess_id]['lock'] = 0
             sess[sess_id]['task'] = nil
         end
 
@@ -120,8 +115,7 @@ Telegram::Bot::Client.run(token) do |bot|
 
         # Global Cancel
         if message.text == '/cancel' or message.text == '/cancel@bayarutangbot'
-            sess[sess_id]['u_lock'] = 0
-            sess[sess_id]['l_lock'] = 0
+            sess[sess_id]['lock'] = 0
 
             kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true, selective: true)
             notification = 'Okay, task cancelled'
@@ -129,43 +123,54 @@ Telegram::Bot::Client.run(token) do |bot|
         end
 
         # utang Case
-        if sess[sess_id]['u_lock'] > 0
-            if sess[sess_id]['u_lock'] == 1 # Ask the utang mode
+        if sess[sess_id]['lock'] > 0
+            if sess[sess_id]['lock'] == 1 # Ask the utang mode
                 task['other_name'] = message.text
                 task['other_id'] = task['users'][message.text]
-                sess[sess_id]['u_lock'] += 1
+                sess[sess_id]['lock'] += 1
 
-                jenis = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: [['Berutang'],['Mengutangi']], one_time_keyboard: true, selective: true)
+                case task['name']
+                when 'utang'
+                    choice = [['Berutang'],['Mengutangi']]
+                when 'lunas'
+                    choice = [['Melunasi'],['Dilunasi']]
+                end
+
+                jenis = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: choice, one_time_keyboard: true, selective: true)
                 question = 'Berutang atau mengutangi?'
                 bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: question, reply_markup: jenis)
 
-            elsif sess[sess_id]['u_lock'] == 2 # Ask how much 
+            elsif sess[sess_id]['lock'] == 2 # Ask how much 
                 task['type'] = message.text
-                sess[sess_id]['u_lock'] += 1
+                sess[sess_id]['lock'] += 1
 
                 # kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true, selective: true)
                 reply = Telegram::Bot::Types::ForceReply.new(force_reply: true, selective: true)
                 howmuch = 'Berapa Banyak?'
                 bot.api.send_message(chat_id: message.chat.id, text: howmuch, reply_to_message_id: message.message_id, reply_markup: reply)
 
-            elsif sess[sess_id]['u_lock'] == 3
+            elsif sess[sess_id]['lock'] == 3
                 task['amount'] = message.text
                 nice_amt = task['amount'].to_s.reverse.gsub(/...(?=.)/,'\&,').reverse
 
-                sess[sess_id]['u_lock'] += 1
+                sess[sess_id]['lock'] += 1
 
                 confirm = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: [['Iya'],['Lah kata siapa?']], one_time_keyboard: true, selective: true)
 
                 case task['type']
                 when 'Berutang'
                     konfirmasi = "Wah, jadi lu ngutang sebanyak *#{nice_amt}* ke *#{task['other_name']}*. Beneran?"
-                    bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', reply_to_message_id: message.message_id, text: konfirmasi, reply_markup: confirm)
                 when 'Mengutangi'
                     konfirmasi = "Oh, jadi si *#{task['other_name']}* ngutang sebanyak *#{nice_amt}* ke lu. Yakin udah benar?"
-                    bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', reply_to_message_id: message.message_id, text: konfirmasi, reply_markup: confirm)
+                when 'Melunasi'
+                    konfirmasi = "Wah, akhirnya lu lunasin utang sebanyak *#{nice_amt}* ke *#{task['other_name']}*. Beneran?"
+                when 'Dilunasi'
+                    konfirmasi = "Oh, jadi si *#{task['other_name']}* bayar utang sebanyak *#{nice_amt}* ke lu. Yakin udah benar?"
                 end
 
-            elsif sess[sess_id]['u_lock'] == 4
+                bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', reply_to_message_id: message.message_id, text: konfirmasi, reply_markup: confirm)
+
+            elsif sess[sess_id]['lock'] == 4
                 puts task #debug
                 kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true, selective: true)
 
@@ -180,6 +185,14 @@ Telegram::Bot::Client.run(token) do |bot|
                         db.execute "INSERT INTO utang_log(loaner_id,loanee_id,amount,chat_id) VALUES(#{usr_id},#{task['other_id']},#{task['amount']},#{message.chat.id})"
                         insert_rel(db, task['other_id'], usr_id, (task['amount'].to_i * -1), message.chat.id)
                         konfirmasi = 'Mudah2an cepat dibayar ya! Udah kita catat'
+                    when 'Melunasi'
+                        db.execute "INSERT INTO lunas_log(loaner_id,loanee_id,amount,chat_id) VALUES(#{task['other_id']},#{usr_id},#{task['amount']},#{message.chat.id})"
+                        insert_rel(db, usr_id, task['other_id'], task['amount'].to_i, message.chat.id)
+                        konfirmasi = 'Aseek selangkah menuju bebas utang! Udah dicatat'
+                    when 'Dilunasi'
+                        db.execute "INSERT INTO lunas_log(loaner_id,loanee_id,amount,chat_id) VALUES(#{usr_id},#{task['other_id']},#{task['amount']},#{message.chat.id})"
+                        insert_rel(db, task['other_id'], usr_id, task['amount'].to_i, message.chat.id)
+                        konfirmasi = 'Wah udah kaya dong sekarang. Udah dicatat'
                     end
                     
                     bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: konfirmasi, reply_markup:kb)
@@ -188,7 +201,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: konfirmasi, reply_markup: kb)
                 end
                 
-                sess[sess_id]['u_lock'] = 0
+                sess[sess_id]['lock'] = 0
             end
 
         else
@@ -221,10 +234,30 @@ Telegram::Bot::Client.run(token) do |bot|
                 begin
                     regischeck(db,usr_id,message.chat.id)
 
-                    sess[sess_id]['u_lock'] += 1
+                    sess[sess_id]['lock'] += 1
                     sess[sess_id]['task'] = Hash.new
                     task = sess[sess_id]['task']
                     
+                    task['name'] = 'utang'
+                    answers,task['users'] = getuserchoice(db,usr_id,message.chat.id)
+                    question = 'Siapa yang berurusan sama lu?'
+                    bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: question, reply_markup: answers)
+
+                rescue Exception => e
+                    puts e
+                    question = "Please register first, #{message.from.first_name}. Type /start to start using this app!"
+                    bot.api.send_message(chat_id: message.chat.id, text: question)
+                end
+            
+            when '/lunas'
+                begin
+                    regischeck(db,usr_id,message.chat.id)
+
+                    sess[sess_id]['lock'] += 1
+                    sess[sess_id]['task'] = Hash.new
+                    task = sess[sess_id]['task']
+                    
+                    task['name'] = 'lunas'
                     answers,task['users'] = getuserchoice(db,usr_id,message.chat.id)
                     question = 'Siapa yang berurusan sama lu?'
                     bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: question, reply_markup: answers)
@@ -240,10 +273,10 @@ Telegram::Bot::Client.run(token) do |bot|
                     regischeck(db,usr_id,message.chat.id)
 
                     user_data, plus, minus = daftar_utang(db,usr_id,message.chat.id)
-                    out_text = ''
+                    out_text = "Hi, #{message.from.first_name} \n"
 
                     if plus.length > 0
-                        out_text = "Ini adalah daftar utang-utang kamu:  \n"
+                        out_text += "\nIni adalah daftar utang-utang kamu:  \n"
                     end
 
                     plus.each do |key, value|
