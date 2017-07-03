@@ -137,7 +137,7 @@ Telegram::Bot::Client.run(token) do |bot|
                 end
 
                 jenis = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: choice, one_time_keyboard: true, selective: true)
-                question = 'Berutang atau mengutangi?'
+                question = 'Lu Berutang atau Mengutangi Si *#{task['other_name']}*?'
                 bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: question, reply_markup: jenis)
 
             elsif sess[sess_id]['lock'] == 2 # Ask how much 
