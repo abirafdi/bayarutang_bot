@@ -155,7 +155,7 @@ Telegram::Bot::Client.run(token) do |bot|
 
                 sess[sess_id]['lock'] += 1
 
-                confirm = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: [['Iya'],['Lah kata siapa?']], one_time_keyboard: true, selective: true)
+                confirm = Telegram::Bot::Types::ReplyKeyboardMarkup.new(keyboard: [['Iya'],['Ya'],['Gak'],['Lah kata siapa?']], one_time_keyboard: true, selective: true)
 
                 case task['type']
                 when 'Berutang'
@@ -175,7 +175,7 @@ Telegram::Bot::Client.run(token) do |bot|
                 kb = Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true, selective: true)
 
                 case message.text
-                when 'Iya'
+                when 'Iya', 'Ya'
                     case task['type']
                     when 'Berutang'
                         db.execute "INSERT INTO utang_log(loaner_id,loanee_id,amount,chat_id) VALUES(#{task['other_id']},#{usr_id},#{task['amount']},#{message.chat.id})"
@@ -196,7 +196,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     end
                     
                     bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: konfirmasi, reply_markup:kb)
-                when 'Lah kata siapa?'
+                when 'Lah kata siapa?', 'Gak'
                     konfirmasi = 'Ah dasar tukang bohong!'
                     bot.api.send_message(chat_id: message.chat.id, reply_to_message_id: message.message_id, text: konfirmasi, reply_markup: kb)
                 end
