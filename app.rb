@@ -23,7 +23,7 @@ def regischeck(db,user_id,chat_id)
     if rs.length > 0
         return true
     else
-        raise "Id #{user_id} is not registered in this chat room!"
+        raise "Id #{user_id} belum terdaftar!"
     end
 end
 
@@ -246,7 +246,7 @@ Telegram::Bot::Client.run(token) do |bot|
 
                 rescue Exception => e
                     puts e
-                    question = "Please register first, #{message.from.first_name}. Type /start to start using this app!"
+                    question = "Lu belum daftar, #{message.from.first_name}. Ketik /start untuk menggunakan aplikasi ini!"
                     bot.api.send_message(chat_id: message.chat.id, text: question)
                 end
             
@@ -265,7 +265,7 @@ Telegram::Bot::Client.run(token) do |bot|
 
                 rescue Exception => e
                     puts e
-                    question = "Please register first, #{message.from.first_name}. Type /start to start using this app!"
+                    question = "Lu belum daftar, #{message.from.first_name}. Ketik /start untuk menggunakan aplikasi ini!"
                     bot.api.send_message(chat_id: message.chat.id, text: question)
                 end
 
@@ -305,7 +305,7 @@ Telegram::Bot::Client.run(token) do |bot|
                     bot.api.send_message(chat_id: message.chat.id, parse_mode: 'Markdown', text: out_text)
                 rescue => e
                     puts e
-                    question = "Please register first, #{message.from.first_name}. Type /start to start using this app!"
+                    question = "Lu belum daftar, #{message.from.first_name}. Ketik /start untuk menggunakan aplikasi ini!"
                     bot.api.send_message(chat_id: message.chat.id, text: question)
                 end
 
